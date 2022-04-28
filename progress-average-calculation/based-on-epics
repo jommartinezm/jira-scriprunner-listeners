@@ -1,0 +1,51 @@
+if(issue.fields.issuetype.name == "Epic"){
+    logger.info("Este elemento es un Epic")
+    //Obtiene las incidencias relacionadas 
+    def relatedOutwardIssues = issue.fields.issuelinks.outwardIssue
+    //Itera las incidencias relacionadas 
+    for (relatedOutwardIssue in relatedOutwardIssues) {
+        //Evalua si la incidencia relacionada es un KR
+        if(relatedOutwardIssue.fields.issuetype.id == "10017"){
+            def impactedKrKey = relatedOutwardIssue.key
+            logger.info("Se ha encontrado el KR ${impactedKrKey} para el Epic")
+            //Obtenemos la información del issue
+            def impactedKr = get('/rest/api/2/issue/' + impactedKrKey)
+            .header('Content-Type', 'application/json')
+            .asObject(Map)
+            .body
+            //Obtenemos las issues relacionaddas
+            def relatedLinkedIssues = impactedKr.fields.issuelinks
+            def newProgress = 0
+            def totalOfChilds = 0
+            for (relatedLinkedIssue in relatedLinkedIssues){
+                //Validamos si son Inward issues del tipo 
+                if (relatedLinkedIssue.type.id == "10008"){
+                   def relatedInwardIssueKey = relatedLinkedIssue.inwardIssue.key
+                        totalOfChilds = totalOfChilds + 1
+                        //Obtenemos el detalle de la incidencia
+                        def relatedIssue = get('/rest/api/2/issue/' + relatedInwardIssueKey)
+                        .header('Content-Type', 'application/json')
+                        .asObject(Map)
+                        .body
+                        newProgress = newProgress + relatedIssue.fields.customfield_10044
+                }
+            }
+            newProgress = newProgress / totalOfChilds
+            logger.info("El progreso del KR es: ${newProgress}")
+            
+            // Now update the parent issue
+            def result = put("/rest/api/2/issue/${impactedKrKey}")
+            .header('Content-Type', 'application/json')
+            .body([
+                fields: [
+                    customfield_10044 
+                    : newProgress
+                ]
+            ])
+            .asString()
+    
+            // check that updating the parent issue worked
+            assert result.status >= 200 && result.status < 300
+        }
+    }
+}

@@ -1,0 +1,61 @@
+def parentKey = issue.fields.parent.key
+logger.info("Parent ket: ${parentKey}")
+
+//Obtiene Child issues en Done
+def doneChildIssues = get("/rest/api/2/search")
+        .queryString("jql", "parentepic=${parentKey} and issuetype in (Task, Story) and status in (Done)")
+        .asObject(Map)
+        .body
+        .issues as List<Map>
+        
+def totalOfDone = doneChildIssues.size()
+logger.info("Total completed child issues for ${parentKey}: ${totalOfDone}")
+
+//Obtiene Child issues en WIP
+def wipChildIssues = get("/rest/api/2/search")
+        .queryString("jql", "parentepic=${parentKey} and issuetype in (Task, Story) and statuscategory = 4")
+        .asObject(Map)
+        .body
+        .issues as List<Map>
+        
+def totalOfWip = wipChildIssues.size()
+logger.info("Total in progress child issues for ${parentKey}: ${totalOfWip}")
+
+//Obtiene Child issues en ToDo
+def todoChildIssues = get("/rest/api/2/search")
+        .queryString("jql", "parentepic=${parentKey} and issuetype in (Task, Story) and statuscategory = 2")
+        .asObject(Map)
+        .body
+        .issues as List<Map>
+        
+def totalOftodo = todoChildIssues.size()
+logger.info("Total todo child issues for ${parentKey}: ${totalOftodo}")
+
+//Identificamos el total de elementos a evaluar
+def totalOfChilds = totalOftodo + totalOfWip + totalOfDone
+logger.info("Total child issues for ${parentKey}: ${totalOfChilds}")
+
+//Calculamos el progreso
+def newProgress = (100 * (totalOfDone + (totalOfWip * 0.35))) / totalOfChilds
+logger.info("Nuevo progreso de ${parentKey}: ${newProgress}")
+
+// Get the field ids
+def fields = get('/rest/api/2/field')
+        .asObject(List)
+        .body as List<Map>
+
+def summedEstimateField = fields.find { it.name == "Progress" }.id 
+logger.info("Custom field ID to update: ${summedEstimateField}")
+
+// Now update the parent issue
+def result = put("/rest/api/2/issue/${parentKey}")
+        .header('Content-Type', 'application/json')
+        .body([
+            fields: [
+                (summedEstimateField): newProgress
+            ]
+        ])
+        .asString()
+
+// check that updating the parent issue worked
+assert result.status >= 200 && result.status < 300

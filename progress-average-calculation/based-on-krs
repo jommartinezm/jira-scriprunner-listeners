@@ -1,0 +1,70 @@
+if(issue.fields.issuetype.name == "Key Result"){
+    logger.info("Este elemento es un KR")
+    //Obtiene las incidencias relacionadas al KR
+    def relatedIssues = issue.fields.issuelinks
+    //Itera las incidencias relacionadas en busqueda de Objetivos
+    for (relatedIssue in relatedIssues) {
+        if(relatedIssue.outwardIssue != null && relatedIssue.outwardIssue.fields.issuetype.id == "10016"){
+            //Si detectamos un Objetivo relacionado, obtenemos el issueKey
+            def impactedObjetiveKey = relatedIssue.outwardIssue.key
+            logger.info("Se ha encontrado el Objetivo ${impactedObjetiveKey} para el KR")
+            //Obtenemos la información del Objetivo
+            def impactedObjetive = get('/rest/api/2/issue/' + impactedObjetiveKey)
+            .header('Content-Type', 'application/json')
+            .asObject(Map)
+            .body
+            //Obtenemos todas las issues relacionadas al Objetivo
+            def relatedLinkedIssues = impactedObjetive.fields.issuelinks
+            //Inicializamos variables para calculo del progreso
+            def listProgress = []
+            def listWeight = []
+            def newProgress = 0
+            def sumWeight = 0
+            //Iteramos las relaciones en busqueda de relaciones tipo Measure
+            for (relatedLinkedIssue in relatedLinkedIssues){
+                //Validamos si son Inward issues del tipo Measure = 10007
+                if (relatedLinkedIssue.type.id == "10007"){
+                    //Si detectamos una incidencia con esta relacion guardamos el issueKey
+                    def relatedInwardIssueKey = relatedLinkedIssue.inwardIssue.key
+                    //Obtenemos el detalle de la incidencia relacionada
+                    def relatedInwardIssue = get('/rest/api/2/issue/' + relatedInwardIssueKey)
+                    .header('Content-Type', 'application/json')
+                    .asObject(Map)
+                    .body
+                    //Recuperamos el valor del campo Progress = customfield_10044 y actualizamos las variables
+                    if(relatedInwardIssue.fields.customfield_10044 != null){
+                        listProgress << relatedInwardIssue.fields.customfield_10044
+                    } else{
+                        listProgress << 0
+                    }
+                    if(relatedInwardIssue.fields.customfield_10043 != null){
+                        listWeight << relatedInwardIssue.fields.customfield_10043
+                        sumWeight = sumWeight + relatedInwardIssue.fields.customfield_10043
+                    } else {
+                        listWeight << 1
+                        sumWeight = sumWeight + 1
+                    }
+                }
+            }
+            //Calculamos el progreso final
+            for(int i in 1..listProgress.size){
+                newProgress = newProgress + (listProgress.get(i-1)*(listWeight.get(i-1)*100)/sumWeight)/100
+            }
+            logger.info("El progreso del Objetivo es: ${newProgress}")
+            
+            // Now update the parent issue
+            def result = put("/rest/api/2/issue/${impactedObjetiveKey}")
+            .header('Content-Type', 'application/json')
+            .body([
+                fields: [
+                    customfield_10044 
+                    : newProgress
+                ]
+            ])
+            .asString()
+    
+            // check that updating the parent issue worked
+            assert result.status >= 200 && result.status < 300
+        }
+    }
+}
