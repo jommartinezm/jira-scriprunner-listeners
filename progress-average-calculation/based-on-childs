@@ -18,7 +18,7 @@ def validationChildIssues = get("/rest/api/2/search")
         .body
         .issues as List<Map>
         
-def totalOfValidation = doneChildIssues.size()
+def totalOfValidation = validationChildIssues.size()
 logger.info("Total in validation child issues for ${parentKey}: ${totalOfValidation}")
 
 //Obtiene Child issues en WIP
