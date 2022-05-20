@@ -1,11 +1,9 @@
-if(issue.fields.issuetype.name == "Epic"){
-    logger.info("Este elemento es un Epic")
-    //Obtiene las incidencias relacionadas 
+if(issue.fields.issuelinks.outwardIssue != null){   
     def relatedOutwardIssues = issue.fields.issuelinks.outwardIssue
     //Itera las incidencias relacionadas 
     for (relatedOutwardIssue in relatedOutwardIssues) {
         //Evalua si la incidencia relacionada es un KR
-        if(relatedOutwardIssue.fields.issuetype.id == "10017"){
+        if(relatedOutwardIssue.fields.issuetype.id == "${KR_ISSUETYPE_ID}"){
             def impactedKrKey = relatedOutwardIssue.key
             logger.info("Se ha encontrado el KR ${impactedKrKey} para el Epic")
             //Obtenemos la información del issue
@@ -19,7 +17,7 @@ if(issue.fields.issuetype.name == "Epic"){
             def totalOfChilds = 0
             for (relatedLinkedIssue in relatedLinkedIssues){
                 //Validamos si son Inward issues del tipo 
-                if (relatedLinkedIssue.type.id == "10008"){
+                if (relatedLinkedIssue.type.id == "${OKRIMPACT_RELATION_ID}"){
                    def relatedInwardIssueKey = relatedLinkedIssue.inwardIssue.key
                         totalOfChilds = totalOfChilds + 1
                         //Obtenemos el detalle de la incidencia
@@ -27,7 +25,11 @@ if(issue.fields.issuetype.name == "Epic"){
                         .header('Content-Type', 'application/json')
                         .asObject(Map)
                         .body
-                        newProgress = newProgress + relatedIssue.fields.customfield_10044
+                        if (relatedIssue.fields.("${PROGRESS_CUSTOMFIELD_NAME}") != null){
+                            newProgress = newProgress + relatedIssue.fields.("${PROGRESS_CUSTOMFIELD_NAME}")
+                        } else{
+                            newProgress = newProgress + 0
+                        }
                 }
             }
             newProgress = newProgress / totalOfChilds
@@ -38,8 +40,7 @@ if(issue.fields.issuetype.name == "Epic"){
             .header('Content-Type', 'application/json')
             .body([
                 fields: [
-                    customfield_10044 
-                    : newProgress
+                    ("${PROGRESS_CUSTOMFIELD_NAME}") : newProgress
                 ]
             ])
             .asString()
