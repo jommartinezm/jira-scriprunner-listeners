@@ -3,7 +3,7 @@ logger.info("Parent ket: ${parentKey}")
 
 //Obtiene Child issues en Done
 def doneChildIssues = get("/rest/api/2/search")
-        .queryString("jql", "parentepic=${parentKey} and issuetype in (Task, Story) and status in (Done)")
+        .queryString("jql", "parentepic=${parentKey} and status in (Done)")
         .asObject(Map)
         .body
         .issues as List<Map>
@@ -11,9 +11,19 @@ def doneChildIssues = get("/rest/api/2/search")
 def totalOfDone = doneChildIssues.size()
 logger.info("Total completed child issues for ${parentKey}: ${totalOfDone}")
 
+//Obtiene Child issues en Validacion
+def validationChildIssues = get("/rest/api/2/search")
+        .queryString("jql", "parentepic=${parentKey} and status in (Validation)")
+        .asObject(Map)
+        .body
+        .issues as List<Map>
+        
+def totalOfValidation = doneChildIssues.size()
+logger.info("Total in validation child issues for ${parentKey}: ${totalOfValidation}")
+
 //Obtiene Child issues en WIP
 def wipChildIssues = get("/rest/api/2/search")
-        .queryString("jql", "parentepic=${parentKey} and issuetype in (Task, Story) and statuscategory = 4")
+        .queryString("jql", "parentepic=${parentKey} and status in ('In Progress')")
         .asObject(Map)
         .body
         .issues as List<Map>
@@ -23,7 +33,7 @@ logger.info("Total in progress child issues for ${parentKey}: ${totalOfWip}")
 
 //Obtiene Child issues en ToDo
 def todoChildIssues = get("/rest/api/2/search")
-        .queryString("jql", "parentepic=${parentKey} and issuetype in (Task, Story) and statuscategory = 2")
+        .queryString("jql", "parentepic=${parentKey} and statuscategory = ${TODO_STATUS_CATEGORY}")
         .asObject(Map)
         .body
         .issues as List<Map>
@@ -32,11 +42,14 @@ def totalOftodo = todoChildIssues.size()
 logger.info("Total todo child issues for ${parentKey}: ${totalOftodo}")
 
 //Identificamos el total de elementos a evaluar
-def totalOfChilds = totalOftodo + totalOfWip + totalOfDone
+def totalOfChilds = totalOftodo + totalOfWip + totalOfDone + totalOfValidation
 logger.info("Total child issues for ${parentKey}: ${totalOfChilds}")
 
+//Obtenemos los valores de equivalencia
+def wipValue = "${INPROGRESS_STATUS_VALUE}" as float
+def validationValue = "${VALIDATION_STATUS_VALUE}" as float
 //Calculamos el progreso
-def newProgress = (100 * (totalOfDone + (totalOfWip * 0.35))) / totalOfChilds
+def newProgress = (100 * (totalOfDone + (totalOfWip * wipValue) + (totalOfValidation * validationValue))) / totalOfChilds
 logger.info("Nuevo progreso de ${parentKey}: ${newProgress}")
 
 // Get the field ids
@@ -44,7 +57,7 @@ def fields = get('/rest/api/2/field')
         .asObject(List)
         .body as List<Map>
 
-def summedEstimateField = fields.find { it.name == "Progress" }.id 
+def summedEstimateField = fields.find { it.name == "${PROGRESS_FIELD_NAME}" }.id 
 logger.info("Custom field ID to update: ${summedEstimateField}")
 
 // Now update the parent issue
