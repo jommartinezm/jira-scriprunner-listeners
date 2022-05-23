@@ -11,42 +11,46 @@ if(issue.fields.issuelinks.outwardIssue != null){
             .header('Content-Type', 'application/json')
             .asObject(Map)
             .body
-            //Obtenemos las issues relacionaddas
-            def relatedLinkedIssues = impactedKr.fields.issuelinks
-            def newProgress = 0
-            def totalOfChilds = 0
-            for (relatedLinkedIssue in relatedLinkedIssues){
-                //Validamos si son Inward issues del tipo 
-                if (relatedLinkedIssue.type.id == "${OKRIMPACT_RELATION_ID}"){
-                   def relatedInwardIssueKey = relatedLinkedIssue.inwardIssue.key
-                        totalOfChilds = totalOfChilds + 1
-                        //Obtenemos el detalle de la incidencia
-                        def relatedIssue = get('/rest/api/2/issue/' + relatedInwardIssueKey)
-                        .header('Content-Type', 'application/json')
-                        .asObject(Map)
-                        .body
-                        if (relatedIssue.fields.("${PROGRESS_CUSTOMFIELD_NAME}") != null){
-                            newProgress = newProgress + relatedIssue.fields.("${PROGRESS_CUSTOMFIELD_NAME}")
-                        } else{
-                            newProgress = newProgress + 0
-                        }
-                }
+            if(impactedKr.fields.("${CALCULATIONTYPE_CUSTOMFIELD_NAME}") == null || impactedKr.fields.("${CALCULATIONTYPE_CUSTOMFIELD_NAME}").value == "${CALCULATIONTYPE_AUTO_VALUE}"){
+                //Obtenemos las issues relacionaddas
+                def relatedLinkedIssues = impactedKr.fields.issuelinks
+                def newProgress = 0
+                def totalOfChilds = 0
+                for (relatedLinkedIssue in relatedLinkedIssues){
+                    //Validamos si son Inward issues del tipo 
+                    if (relatedLinkedIssue.type.id == "${OKRIMPACT_RELATION_ID}"){
+                       def relatedInwardIssueKey = relatedLinkedIssue.inwardIssue.key
+                            totalOfChilds = totalOfChilds + 1
+                            //Obtenemos el detalle de la incidencia
+                            def relatedIssue = get('/rest/api/2/issue/' + relatedInwardIssueKey)
+                            .header('Content-Type', 'application/json')
+                            .asObject(Map)
+                            .body
+                            if (relatedIssue.fields.("${PROGRESS_CUSTOMFIELD_NAME}") != null){
+                                newProgress = newProgress + relatedIssue.fields.("${PROGRESS_CUSTOMFIELD_NAME}")
+                            } else{
+                                newProgress = newProgress + 0
+                            }
+                    }
+                    }
+                newProgress = newProgress / totalOfChilds
+                logger.info("El progreso del KR es: ${newProgress}")
+                
+                // Now update the parent issue
+                def result = put("/rest/api/2/issue/${impactedKrKey}")
+                .header('Content-Type', 'application/json')
+                .body([
+                    fields: [
+                        ("${PROGRESS_CUSTOMFIELD_NAME}") : newProgress
+                    ]
+                ])
+                .asString()
+        
+                // check that updating the parent issue worked
+                assert result.status >= 200 && result.status < 300
+            } else{
+                logger.info("El KR esta en modo Manual")
             }
-            newProgress = newProgress / totalOfChilds
-            logger.info("El progreso del KR es: ${newProgress}")
-            
-            // Now update the parent issue
-            def result = put("/rest/api/2/issue/${impactedKrKey}")
-            .header('Content-Type', 'application/json')
-            .body([
-                fields: [
-                    ("${PROGRESS_CUSTOMFIELD_NAME}") : newProgress
-                ]
-            ])
-            .asString()
-    
-            // check that updating the parent issue worked
-            assert result.status >= 200 && result.status < 300
         }
     }
 }
